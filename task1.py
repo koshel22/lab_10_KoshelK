@@ -3,6 +3,8 @@ import time
 import random
 
 BUFFER_SIZE = 5
+NUM_PRODUCERS = 3
+NUM_CONSUMERS = 2
 BUFFER = []
 
 empty_slots = threading.Semaphore(BUFFER_SIZE)
@@ -10,35 +12,52 @@ full_slots = threading.Semaphore(0)
 mutex = threading.Lock()
 stop_event = threading.Event()
 
-def producer():
+
+def producer(producer_id):
     while not stop_event.is_set():
         item = random.randint(1, 100)
         if empty_slots.acquire(timeout=1):
             with mutex:
                 BUFFER.append(item)
-                print(f"[Producer] Додав: {item}. Буфер: {BUFFER}")
+                print(
+                    f"[Producer-{producer_id}] Added {item}. Buffer: {BUFFER}"
+                )
             full_slots.release()
-            time.sleep(random.uniform(0.5, 1.0))
+            time.sleep(random.uniform(0.5, 1.5))
 
-def consumer():
+
+def consumer(consumer_id):
     while not stop_event.is_set():
         if full_slots.acquire(timeout=1):
             with mutex:
-                item = BUFFER.pop(0)
-                print(f"[Consumer] Забрав: {item}. Буфер: {BUFFER}")
+                if BUFFER:
+                    item = BUFFER.pop(0)
+                    print(
+                        f"[Consumer-{consumer_id}] Taken {item}. "
+                        f"Buffer: {BUFFER}"
+                    )
             empty_slots.release()
-            time.sleep(random.uniform(0.5, 1.0))
+            time.sleep(random.uniform(1.0, 2.0))
+
 
 if __name__ == "__main__":
-    t1 = threading.Thread(target=producer)
-    t2 = threading.Thread(target=consumer)
-    
-    t1.start()
-    t2.start()
-    
-    time.sleep(5)
+    threads = []
+
+    for i in range(NUM_PRODUCERS):
+        t = threading.Thread(target=producer, args=(i,))
+        threads.append(t)
+        t.start()
+
+    for i in range(NUM_CONSUMERS):
+        t = threading.Thread(target=consumer, args=(i,))
+        threads.append(t)
+        t.start()
+
+    time.sleep(7)
+    print("\n--- Stopping threads ---")
     stop_event.set()
-    
-    t1.join()
-    t2.join()
-    print("Виконання програми закінчено.")
+
+    for t in threads:
+        t.join()
+
+    print("All threads stopped. Program finished.")
